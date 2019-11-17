@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+/usr/local/bin/node /Users/LHoin/source-github/LHoin/desktop-cleaner/index.js
