@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
+const moment = require('moment');
 const _ = require('lodash');
 
 const mkdirIfNotExist = async (dirPath) => {
@@ -20,6 +21,20 @@ const patternMatcher = (pattern) => async (sourcePath) => {
 };
 
 // handler
+const moveAndClassifyByDate = (destPath) => async (sourcePath, dirent) => {
+  try {
+    await mkdirIfNotExist(destPath);
+    const fileStat = await fs.stat(dirent.name);
+    const modifyDateStr = moment(fileStat.mtimeMs).format('YYYYMMDD');
+    const dateDir = path.join(destPath, `/${modifyDateStr}`);
+    await mkdirIfNotExist(dateDir);
+    console.log(path.join(dateDir, sourcePath));
+    await fs.rename(sourcePath, path.join(dateDir, sourcePath));
+  } catch (e) {
+    console.log('handle error: ', e);
+  }
+};
+
 const moveTo = (destPath) => async (sourcePath) => {
   try {
     await mkdirIfNotExist(destPath);
@@ -37,7 +52,11 @@ const rules = [
   },
   {
     matcher: patternMatcher(/^data_\d*_\d*\.csv$/),
-    handler: moveTo('./qav-logs') 
+    handler: moveAndClassifyByDate('./qav-logs') 
+  },
+  {
+    matcher: patternMatcher(/(拉勾招聘|猎聘简历|(前端开发工程师.*\d年))/),
+    handler: moveAndClassifyByDate('./cv') 
   },
   {
     matcher: patternMatcher(/\.(numbers|xls|xlsx|csv)$/),
@@ -52,7 +71,7 @@ const rules = [
     handler: moveTo('./ppts') 
   },
   {
-    matcher: patternMatcher(/\.(doc|docx|pdf)$/),
+    matcher: patternMatcher(/\.(pages|doc|docx|pdf)$/),
     handler: moveTo('./docs') 
   },
   {
@@ -66,12 +85,13 @@ const run = async () => {
   const dir = await fs.opendir('./');
   for await (const dirent of dir) {
     for (const rule of rules) {
-      console.log(dirent.name);
+      //console.log(dirent.name);
       if (!dirent.isFile()) {
-        continue;
+        break;
       }
-      if (await rule.matcher(dirent.name)) {
-        await rule.handler(dirent.name);
+      if (await rule.matcher(dirent.name, dirent)) {
+        await rule.handler(dirent.name, dirent);
+        break;
       }
     }
   }
