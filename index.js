@@ -44,8 +44,16 @@ const moveTo = (destPath) => async (sourcePath) => {
   }
 };
 
+const ignore = async (sourcePath) => {
+  console.log('ignore');
+};
+
 
 const rules = [
+  {
+    matcher: patternMatcher(/^clean$/),
+    handler: ignore 
+  },
   {
     matcher: patternMatcher(/\.(js|json)$/),
     handler: moveTo('./codes') 
