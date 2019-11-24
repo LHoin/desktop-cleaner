@@ -1,17 +1,22 @@
-const fs = require('fs').promises;
+const fs = require('fs');
+const util = require('util');
 const path = require('path');
 const moment = require('moment');
 const _ = require('lodash');
+const readdir = util.promisify(fs.readdir);
+const lstat = util.promisify(fs.lstat);
+const mkdir = util.promisify(fs.mkdir);
+const rename = util.promisify(fs.rename);
 
 const mkdirIfNotExist = async (dirPath) => {
   try {
-    const dirStat = await fs.stat(dirPath);
+    const dirStat = await lstat(dirPath);
     if (dirStat.isDirectory()) {
       return;
     }
-    fs.mkdir(dirPath);
+    await mkdir(dirPath);
   } catch (e) {
-    fs.mkdir(dirPath);
+    await mkdir(dirPath);
   }
 };
 
@@ -24,12 +29,12 @@ const patternMatcher = (pattern) => async (sourcePath) => {
 const moveAndClassifyByDate = (destPath) => async (sourcePath, dirent) => {
   try {
     await mkdirIfNotExist(destPath);
-    const fileStat = await fs.stat(dirent.name);
+    const fileStat = await lstat(sourcePath);
     const modifyDateStr = moment(fileStat.mtimeMs).format('YYYYMMDD');
     const dateDir = path.join(destPath, `/${modifyDateStr}`);
     await mkdirIfNotExist(dateDir);
     console.log(path.join(dateDir, sourcePath));
-    await fs.rename(sourcePath, path.join(dateDir, sourcePath));
+    await rename(sourcePath, path.join(dateDir, sourcePath));
   } catch (e) {
     console.log('handle error: ', e);
   }
@@ -38,7 +43,7 @@ const moveAndClassifyByDate = (destPath) => async (sourcePath, dirent) => {
 const moveTo = (destPath) => async (sourcePath) => {
   try {
     await mkdirIfNotExist(destPath);
-    return await fs.rename(sourcePath, path.join(destPath, sourcePath));
+    return await rename(sourcePath, path.join(destPath, sourcePath));
   } catch (e) {
     console.log('handle error: ', e);
   }
@@ -59,7 +64,7 @@ const rules = [
     handler: moveTo('./codes') 
   },
   {
-    matcher: patternMatcher(/^data_\d*_\d*\.csv$/),
+    matcher: patternMatcher(/^data_\d*_\d*\.(csv|numbers)$/),
     handler: moveAndClassifyByDate('./qav-logs') 
   },
   {
@@ -90,15 +95,15 @@ const rules = [
 
 const run = async () => {
   process.chdir('/Users/LHoin/Desktop');
-  const dir = await fs.opendir('./');
-  for await (const dirent of dir) {
+  const dir = await readdir('./');
+  for (const path of dir) {
     for (const rule of rules) {
-      //console.log(dirent.name);
+      const dirent = await lstat(path);
       if (!dirent.isFile()) {
         break;
       }
-      if (await rule.matcher(dirent.name, dirent)) {
-        await rule.handler(dirent.name, dirent);
+      if (await rule.matcher(path, dirent)) {
+        await rule.handler(path, dirent);
         break;
       }
     }
